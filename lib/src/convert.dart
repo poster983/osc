@@ -305,6 +305,7 @@ class OSCMessageParser {
 
   String asString(List<int> bytes) => stringCodec.decode(bytes);
 
+  //Eating advances the index. Will error if [byte] is not the next value in input
   void eat({required int byte}) {
     if (input[++index] != byte) {
       //TODO: throw
@@ -324,16 +325,27 @@ class OSCMessageParser {
     if (typeTagBytes.isNotEmpty) {
       eat(byte: 0);
       align();
-
       final codecs =
           typeTagBytes.map((b) => DataCodec.forType(asString(<int>[b])));
+
+      int count = 0;
       for (var codec in codecs) {
         final value = codec.decode(input.sublist(index));
         args.add(value);
 
         index += codec.length(value);
+        ///This line was previously removed in an earlier commit but was proposed to be re-added to fix the multiple of 4 error. Because it was previously removed (and there is no documentation as to why) a new solution was devised below. (Thank you Connor! @M0nster5)
         // if (value is String) eat(byte: 0);
+        
+
+        /// At this point the index is a multiple of 4. This causes the align function to return 0
+        /// This mean when we start at the next codec we are really at the space causing the remaining arguments to get left out
+        if (count == 0 &&
+            index % 4 == 0 &&
+            index < input.length - 1 &&
+            input[index] == 0) eat(byte: 0);
         align();
+        count++;
       }
     }
 
